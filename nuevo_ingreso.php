@@ -3,9 +3,10 @@ ob_start();
 include('config.php');
 include('clase/Ingreso.php');
 
+
 // Obtener lista de productos, clientes, empleados y proveedores
 $cuentas = $conn->query("SELECT Id_cuenta, Cuenta FROM cuentas");
-$productos = $conn->query("SELECT * FROM producto");
+$productos = $conn->query("SELECT * FROM producto_id, producto FROM producto");
 $clientes = $conn->query("SELECT * FROM clientes");
 $empleados = $conn->query("SELECT * FROM usuarios WHERE rol IN ('usuario', 'empleado')");
 $proveedores = $conn->query("SELECT * FROM proveedores");
@@ -31,7 +32,8 @@ if (!empty($cliente)) {
 }
 
 // Verificar si se ha enviado el formulario
-$productos = $conn->query("SELECT * FROM producto");
+$productos = $conn->query("SELECT * FROM id_producto, producto FROM producto");
+
 
 // Inicia las variables de subtotal, IVA y total
 $subtotal = 0;
@@ -133,6 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         echo "❌ Error en la preparación de la consulta: " . $conn->error;
     }
+
+
+    
 }
 ?>
 

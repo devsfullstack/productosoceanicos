@@ -7,69 +7,126 @@ class Ingreso {
     public function __construct($conn) {
         $this->conn = $conn;
     }
+    
+        // Insertar ingreso
+        public function insertarIngreso($datos) {
+            $query = "INSERT INTO ingresos 
+                      (fecha, vencimiento, tipo_ingreso, descripcion, monto, estado, empleado_responsable, metodo_pago, metodo_transporte, subtotal, iva, total, proveedor, tipo_factura, cliente, id_cuenta) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+            $stmt = $this->conn->prepare($query);
+    
+            if (!$stmt) {
+                throw new Exception("Error al preparar la consulta: " . $this->conn->error);
+            }
+    
+            $stmt->bind_param(
+                "ssssddssdddsdss",
+                $datos['fecha'],
+                $datos['vencimiento'],
+                $datos['tipo_ingreso'],
+                $datos['descripcion'],
+                $datos['monto'],
+                $datos['estado'],
+                $datos['empleado_responsable'],
+                $datos['metodo_pago'],
+                $datos['metodo_transporte'],
+                $datos['subtotal'],
+                $datos['iva'],
+                $datos['total'],
+                $datos['proveedor'],
+                $datos['tipo_factura'],
+                $datos['cliente'],
+                $datos['id_cuenta']
+            );
+    
+            if (!$stmt->execute()) {
+                throw new Exception("Error al ejecutar la consulta: " . $stmt->error);
+            }
+    
+            return $this->conn->insert_id; // Devuelve el ID del ingreso insertado
+        }
+    
+        // Insertar productos en ingreso_productos
+        public function insertarIngresoProductos($ingresoID, $productos) {
+            foreach ($productos as $producto) {
+                $query = "INSERT INTO ingreso_productos 
+                          (IngresoID, ProductoID, Cantidad, Precio, Subtotal) 
+                          VALUES (?, ?, ?, ?, ?)";
+    
+                $stmt = $this->conn->prepare($query);
+    
+                if (!$stmt) {
+                    throw new Exception("Error al preparar la consulta: " . $this->conn->error);
+                }
+    
+                $subtotal = $producto['Cantidad'] * $producto['Precio'];
+    
+                $stmt->bind_param(
+                    "iiidd",
+                    $ingresoID,
+                    $producto['ProductoID'],
+                    $producto['Cantidad'],
+                    $producto['Precio'],
+                    $subtotal
+                );
+    
+                if (!$stmt->execute()) {
+                    throw new Exception("Error al insertar producto: " . $stmt->error);
+                }
+    
+                // Actualizar el stock del producto
+                $this->actualizarStock($producto['ProductoID'], $producto['Cantidad']);
+            }
+        }
+    
+        // Actualizar el stock de productos
+        private function actualizarStock($productoID, $cantidad) {
+            $query = "UPDATE productos 
+                      SET Stock = Stock - ? 
+                      WHERE ProductoID = ?";
+    
+            $stmt = $this->conn->prepare($query);
+    
+            if (!$stmt) {
+                throw new Exception("Error al preparar la consulta: " . $this->conn->error);
+            }
+    
+            $stmt->bind_param("ii", $cantidad, $productoID);
+    
+            if (!$stmt->execute()) {
+                throw new Exception("Error al actualizar el stock: " . $stmt->error);
+            }
+        }
+    
+        // Generar reporte de ingreso con productos
+        public function generarReporte($ingresoID) {
+            $query = "SELECT 
+                        i.IngresoID, 
+                        i.Fecha, 
+                        p.Nombre AS Producto, 
+                        ip.Cantidad, 
+                        ip.Precio, 
+                        ip.Subtotal, 
+                        i.Total 
+                      FROM ingresos i
+                      JOIN ingreso_productos ip ON i.IngresoID = ip.IngresoID
+                      JOIN productos p ON ip.ProductoID = p.ProductoID
+                      WHERE i.IngresoID = ?";
+    
+            $stmt = $this->conn->prepare($query);
+    
+            if (!$stmt) {
+                throw new Exception("Error al preparar la consulta: " . $this->conn->error);
+            }
+    
+            $stmt->bind_param("i", $ingresoID);
+            $stmt->execute();
+            return $stmt->get_result();
+        }
 
-    public function insertarIngreso(
-        $fecha, 
-        $vencimiento, 
-        $tipo_ingreso, 
-        $descripcion, 
-        $monto, 
-        $estado, 
-        $metodo_pago, 
-        $empleado_responsable, 
-        $metodo_transporte, 
-        $subtotal, 
-        $iva, 
-        $total, 
-        $proveedor, // Ahora este parámetro es el nombre del proveedor
-        $tipo_factura, 
-        $cliente, // Ahora este parámetro es el nombre del cliente
-        $id_cuenta,
-        $productos_json
-    ) {
-        // Consulta SQL
-        $query = "INSERT INTO ingresos (fecha, vencimiento, tipo_ingreso, descripcion, monto, estado, empleado_responsable, metodo_pago, metodo_transporte, subtotal, iva, total, proveedor, tipo_factura, cliente,id_cuenta, producto) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    
-        // Preparamos la consulta
-        $stmt = $this->conn->prepare($query);
-    
-        if ($stmt === false) {
-            throw new Exception("Error en la preparación de la consulta: " . $this->conn->error);
-        }
-    
-        // Vinculamos los parámetros
-        if (!$stmt->bind_param("ssssddssdddsdss", 
-            $fecha, 
-            $vencimiento, 
-            $tipo_ingreso, 
-            $descripcion, 
-            $monto,         // double
-            $estado, 
-            $empleado_responsable, 
-            $metodo_pago, 
-            $metodo_transporte, 
-            $subtotal,      // double
-            $iva,           // double
-            $total,         // double
-            $proveedor,  // Nombre del proveedor (varchar)
-            $tipo_factura,  // tipo de factura (varchar)
-            $cliente,    // Nombre del cliente (varchar)
-            $id_cuenta,    // Nombre del cliente (varchar)
-            $productos_json // JSON de productos (varchar o text)
-        )) {
-            throw new Exception("Error al enlazar parámetros: " . $stmt->error);
-        }
-    
-        // Ejecutamos la consulta
-        if (!$stmt->execute()) {
-            throw new Exception("Error al ejecutar la consulta: " . $stmt->error);
-        }
-    
-        return true;
-    }
-    
 
+    
     // Función para verificar y actualizar el estado de las facturas a "vencida"
     public function actualizarEstadoVencido() {
         $query = "UPDATE ingresos SET estado = 'vencida' WHERE estado = 'pendiente' AND TIMESTAMPDIFF(HOUR, fecha, NOW()) > 24";
